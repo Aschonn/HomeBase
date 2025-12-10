@@ -1,0 +1,134 @@
+terraform {
+  required_version = ">=1.5.0"
+  required_providers {
+    proxmox = {
+      source  = "bpg/proxmox"
+      version = ">=0.53.1"
+    }
+  }
+}
+
+resource "proxmox_virtual_environment_vm" "vm" {
+  node_name     = var.node
+  vm_id         = var.vm_id
+  name          = var.vm_name
+  description   = var.description
+  tags          = var.tags
+  bios          = var.bios
+  machine       = var.machine
+  tablet_device = var.tablet
+
+  operating_system {
+    type = var.os_type
+  }
+
+  agent {
+    enabled = var.qemu_guest_agent
+  }
+
+  clone {
+    node_name = var.template_node
+    vm_id     = var.template_id
+    full      = var.full_clone
+  }
+
+  cpu {
+    cores = var.vcpu
+    type  = var.vcpu_type
+    numa  = var.numa
+  }
+
+  memory {
+    dedicated = var.memory
+    floating  = var.memory_floating
+  }
+
+  dynamic "numa" {
+    for_each = var.numa == true ? [1] : []
+    content {
+      device    = var.numa_device
+      cpus      = var.numa_cpus
+      memory    = var.numa_memory
+      hostnodes = var.numa_hostnodes
+      policy    = var.numa_policy
+    }
+  }
+
+  vga {
+    type   = var.display_type
+    memory = var.display_memory
+  }
+
+  dynamic "efi_disk" {
+    for_each = var.bios == "ovmf" ? [1] : []
+    content {
+      datastore_id      = var.efi_disk_storage
+      file_format       = var.efi_disk_format
+      type              = var.efi_disk_type
+      pre_enrolled_keys = var.efi_disk_pre_enrolled_keys
+    }
+  }
+
+  # -------------------------------------------------------
+  # NEW DISK FORMAT (slot-based, required in latest BPG provider)
+  # -------------------------------------------------------
+  dynamic "disk" {
+    for_each = var.disks
+
+    content {
+      slot         = disk.value.slot          # e.g. "scsi0"
+      datastore_id = disk.value.storage       # e.g. "local-lvm"
+      size         = disk.value.size          # GB
+      file_format  = disk.value.format        # "raw" or "qcow2"
+      ssd          = disk.value.ssd
+      discard      = disk.value.discard
+      cache        = disk.value.cache
+      iothread     = disk.value.iothread
+    }
+  }
+
+  network_device {
+    model   = var.vnic_model
+    bridge  = var.vnic_bridge
+    vlan_id = var.vlan_tag
+  }
+
+  # -------------------------------------------------------
+  # CLOUD-INIT
+  # -------------------------------------------------------
+  initialization {
+    datastore_id         = var.ci_datastore_id
+    meta_data_file_id    = var.ci_meta_data
+    network_data_file_id = var.ci_network_data
+    user_data_file_id    = var.ci_user_data
+    vendor_data_file_id  = var.ci_vendor_data
+
+    # SSH user + key injection
+    user_account {
+      username = var.ci_user
+      password = var.ci_password
+      keys     = var.ci_ssh_key != null ? [file(var.ci_ssh_key)] : null
+    }
+
+    # DNS
+    dns {
+      domain  = var.ci_dns_domain
+      servers = var.ci_dns_server != null ? [var.ci_dns_server] : []
+    }
+
+    # Static IP
+    ip_config {
+      ipv4 {
+        address = var.ci_ipv4_cidr   # e.g. "192.168.0.60/24"
+        gateway = var.ci_ipv4_gateway
+      }
+    }
+  }
+
+  # Required because cloud-init user_account updates cause forced replacement
+  lifecycle {
+    ignore_changes = [
+      initialization["user_account"],
+    ]
+  }
+}

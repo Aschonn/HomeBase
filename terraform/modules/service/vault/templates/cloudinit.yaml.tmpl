@@ -1,0 +1,24 @@
+#cloud-config
+users:
+  - name: ${ssh_user}
+    ssh-authorized-keys:
+      - ${ssh_key}
+    sudo: ["ALL=(ALL) NOPASSWD:ALL"]
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - unzip
+  - jq
+
+runcmd:
+  - wget https://releases.hashicorp.com/vault/1.17.0/vault_1.17.0_linux_amd64.zip -O /tmp/vault.zip
+  - unzip /tmp/vault.zip -d /usr/local/bin/
+  - mkdir -p /etc/vault.d
+  - echo "${vault_hcl}" > /etc/vault.d/vault.hcl
+  - mkdir -p /opt/vault/data
+  - echo "${vault_service}" > /etc/systemd/system/vault.service
+  - systemctl daemon-reload
+  - systemctl enable vault
+  - systemctl start vault

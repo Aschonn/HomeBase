@@ -1,0 +1,153 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: web
+---
+# ----------------------------
+# Site 1 Deployment + ConfigMap
+# ----------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: site1
+  namespace: web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: site1
+  template:
+    metadata:
+      labels:
+        app: site1
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: html
+          mountPath: /usr/share/nginx/html
+      volumes:
+      - name: html
+        configMap:
+          name: site1-html
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: site1-html
+  namespace: web
+data:
+  index.html: |
+    <html>
+      <head><title>Site 1</title></head>
+      <body>
+        <h1>Welcome to Site 1!</h1>
+      </body>
+    </html>
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: site1
+  namespace: web
+spec:
+  selector:
+    app: site1
+  ports:
+  - port: 80
+    targetPort: 80
+  type: ClusterIP
+---
+# ----------------------------
+# Blog Deployment + ConfigMap
+# ----------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: blog
+  namespace: web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: blog
+  template:
+    metadata:
+      labels:
+        app: blog
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: html
+          mountPath: /usr/share/nginx/html
+      volumes:
+      - name: html
+        configMap:
+          name: blog-html
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: blog-html
+  namespace: web
+data:
+  index.html: |
+    <html>
+      <head><title>Blog</title></head>
+      <body>
+        <h1>Welcome to the Blog!</h1>
+      </body>
+    </html>
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: blog
+  namespace: web
+spec:
+  selector:
+    app: blog
+  ports:
+  - port: 80
+    targetPort: 80
+  type: ClusterIP
+---
+# ----------------------------
+# Ingress for both sites
+# ----------------------------
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: drogon-local
+  namespace: web
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+spec:
+  rules:
+  - host: site1.drogonlocal.tech
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: site1
+            port:
+              number: 80
+  - host: blog.drogonlocal.tech
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: blog
+            port:
+              number: 80

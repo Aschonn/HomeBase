@@ -1,0 +1,20 @@
+{
+  "Dhcp4": {
+    "subnet4": [
+      {
+        "subnet": "${subnet}",
+        "pools": [ { "pool": "${pool_start} - ${pool_end}" } ],
+        "option-data": [
+          { "name": "routers", "data": "${router}" },
+          { "name": "domain-name-servers", "data": ${dns_servers} }
+        ]
+      }
+    ],
+    "control-socket": "/tmp/kea-dhcp4-ctrl.sock",
+    "lease-database": {
+      "type": "memfile",
+      "persist": true,
+      "name": "/var/lib/kea/dhcp4.leases"
+    }
+  }
+}
