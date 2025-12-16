@@ -1,0 +1,5 @@
+---
+ci_user: "{{ lookup('env','PVE_CI_USER') }}"
+ci_password: "{{ lookup('env','PVE_CI_PASSWORD') }}"
+ssh_keys: "{{ lookup('env','PVE_SSH_KEYS') }}"
+git_repo_url: "{{ lookup('env','INFRA_GITHUB_REPO') }}"

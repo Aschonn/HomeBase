@@ -1,0 +1,5 @@
+- name: Configure Jumphost
+  hosts: andrews-jumphosts
+  become: yes
+  roles:
+    - jumphost

@@ -1,0 +1,140 @@
+---
+# -------------------------------------------------------------------
+# APT SAFETY & BASELINE
+# -------------------------------------------------------------------
+
+- name: Disable unattended upgrades
+  ansible.builtin.systemd:
+    name: unattended-upgrades
+    enabled: false
+    state: stopped
+  become: true
+
+- name: Disable apt daily timers
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: false
+    state: stopped
+  loop:
+    - apt-daily.timer
+    - apt-daily-upgrade.timer
+  become: true
+
+- name: Mask apt daily services
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    masked: true
+  loop:
+    - apt-daily.service
+    - apt-daily-upgrade.service
+  become: true
+
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+
+- name: Install essential packages
+  ansible.builtin.apt:
+    name:
+      - git
+      - vim
+      - htop
+      - tmux
+      - ansible-core
+    state: present
+  become: true
+
+# -------------------------------------------------------------------
+# DEPLOY USER & SSH
+# -------------------------------------------------------------------
+
+- name: Create deploy user
+  ansible.builtin.user:
+    name: deploy
+    state: present
+    shell: /bin/bash
+    groups: sudo
+    append: true
+  become: true
+
+- name: Ensure .ssh directory exists for deploy
+  ansible.builtin.file:
+    path: /home/deploy/.ssh
+    state: directory
+    owner: deploy
+    group: deploy
+    mode: '0700'
+  become: true
+
+- name: Add proxmox SSH public key to deploy user
+  ansible.builtin.authorized_key:
+    user: deploy
+    key: "{{ lookup('file', 'files/proxmox.pub') }}"
+  become: true
+
+- name: Copy local private key to remote host
+  ansible.builtin.copy:
+    src: "{{ lookup('env','HOME') }}/.ssh/proxmox"  # private key on control node
+    dest: /home/deploy/.ssh/proxmox
+    owner: deploy
+    group: deploy
+    mode: 0600
+  become: true
+
+- name: Add github.com to known_hosts
+  known_hosts:
+    name: github.com
+    key: "{{ lookup('pipe', 'ssh-keyscan github.com') }}"
+    path: /home/deploy/.ssh/known_hosts
+    state: present
+  become: true
+
+
+# -------------------------------------------------------------------
+# USER ENVIRONMENT
+# -------------------------------------------------------------------
+
+- name: Ensure .kube directory exists
+  ansible.builtin.file:
+    path: /home/deploy/.kube
+    state: directory
+    owner: deploy
+    group: deploy
+    mode: '0700'
+  become: true
+
+- name: Ensure /opt/homebase exists
+  ansible.builtin.file:
+    path: /opt/homebase
+    state: directory
+    owner: deploy
+    group: deploy
+    mode: 0755
+  become: true
+
+# -------------------------------------------------------------------
+# GIT CHECKOUT (AS DEPLOY USER)
+# -------------------------------------------------------------------
+
+- name: Clone HomeBase repo as deploy user
+  ansible.builtin.git:
+    repo: git@github.com:Aschonn/HomeBase.git
+    dest: /opt/homebase
+    version: main
+    key_file: /home/deploy/.ssh/proxmox
+    accept_hostkey: true
+  become: true
+  become_user: deploy
+
+- name: List contents of HomeBase repo
+  ansible.builtin.command:
+    cmd: ls -la /opt/homebase
+  become: true
+  become_user: deploy
+  register: repo_contents
+
+- name: Show HomeBase repo contents
+  ansible.builtin.debug:
+    var: repo_contents.stdout_lines
